@@ -320,7 +320,7 @@ This is going to use `virt-manager` or Virtual Machine Manager. Either way it's 
 
 - When you select disk, search for drivers and then select the VirtIO drivers that match the windows version.
 - When you get into windows, you won't have internet until you install the VirtIO drivers from the ISO (`virtio-win-gt-x64`).
-- Install the NVIDIA drivers.
+- Install the NVIDIA drivers (windows might automatically install them).
 - Restart and apply updates.
 - If you have issues adjusting monitor configuration, try unplugging one of them and then plugging it back in.
 - Disable mouse acceleration, activate windows, etc.
