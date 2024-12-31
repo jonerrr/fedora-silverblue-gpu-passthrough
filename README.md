@@ -19,15 +19,15 @@ Fedora Discussions
 
 ## Hardware
 
-You will need to have a _second monitor_ with this setup. You could try to setup _Looking Glass_ or _Sunshine+Moonlight_ if you wanted to.
+2 monitors, 2 gpus (nvidia in this case)
 
 ### Primary GPU for Host
 
-- [MSI Radeon RX 6700 XT MECH 2X 12G OC](https://us.msi.com/Graphics-Card/Radeon-RX-6700-XT-MECH-2X-12G-OC)
+- rtx 2060 super
 
 ### Secondary GPU for VM
 
-* [Zotac GTX 970 Dual Fan](https://www.zotac.com/us/product/graphics_card/gtx-970#spec) - 145w
+- gtx 1060
 
 ## Preliminary Checks
 
@@ -42,7 +42,7 @@ sudo grep --color --regexp vmx --regexp svm /proc/cpuinfo
 
 If there is no result, make sure to enable `VT-d` for Intel or `AMD-V` for AMD based motherboards. Consult your hardware's instructions on how to do that.
 
-You may need to remove some Nvidia specific options if you had once used an Nvidia GPU.
+You may need to remove some Nvidia specific options if you had once used an Nvidia GPU (and are using AMD GPU).
 
 ```bash
 sudo rpm-ostree kargs \
@@ -111,7 +111,7 @@ done;
 It should spit out stuff that looks like this...
 
 ```bash
-➜  ~ 
+➜  ~
 > bash ./02-check-pci-bus-groups.sh
 IOMMU Group 0:
 	00:01.0 Host bridge [0600]: Advanced Micro Devices, Inc. [AMD] Starship/Matisse PCIe Dummy Host Bridge [1022:1482]
@@ -133,13 +133,13 @@ IOMMU Group 34:
 You can also get the device IDs using `lspci`. In this case, I'm looking for my NVIDIA card to pass-through.
 
 ```bash
-➜  ~ 
+➜  ~
 > lspci -vnn | grep -i --regexp NVIDIA
 0e:00.0 VGA compatible controller [0300]: NVIDIA Corporation GM204 [GeForce GTX 970] [10de:13c2] (rev a1) (prog-if 00 [VGA controller])
 
 0e:00.1 Audio device [0403]: NVIDIA Corporation GM204 High Definition Audio Controller [10de:0fbb] (rev a1)
 
-➜  ~ 
+➜  ~
 > lspci -vnn | grep -i --regexp Radeon
 0d:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 22 [Radeon RX 6700/6700 XT/6750 XT / 6800M] [1002:73df] (rev c1) (prog-if 00 [VGA controller])
 ```
@@ -162,6 +162,19 @@ sudo rpm-ostree initramfs \
   --reboot
 ```
 
+You might need to create `/etc/dracut.conf.d/10-vfio.conf` with the following contents to make sure vfio drivers load before nvidia ones
+
+```bash
+force_drivers+=" vfio_pci vfio vfio_iommu_type1 "
+```
+
+This might also work (put in `/etc/modprobe.d/vfio.conf`)
+
+```bash
+options vfio-pci ids=10de:1c03,10de:10f1
+softdep nvidia pre: vfio-pci
+```
+
 You should now see when you perform
 
 ```bash
@@ -171,7 +184,7 @@ sudo lspci -nnv
 Should show something similar to...
 
 ```bash
-➜  ~ 
+➜  ~
 > sudo lspci -vnn
 [sudo] password for filbot:
 [...lots of output...]
@@ -215,7 +228,7 @@ Should show something similar to...
 You can also check if the _vfio_ Kernel modules made it in the _initramfs_ by using:
 
 ```bash
-➜  ~ 
+➜  ~
 > sudo lsinitrd /boot/ostree/fedora-af7516f20c0bee3df3aa77532024d9fb7c207d1b7246d1d4949b047d7ab916d9/initramfs-6.0.15-300.fc37.x86_64.img| grep -i --regexp vfio
 Arguments:  --reproducible -v --add 'ostree' --tmpdir '/tmp/dracut' -f --no-hostonly --kver '6.0.15-300.fc37.x86_64' --reproducible -v --add 'ostree' --tmpdir '/tmp/dracut' -f --no-hostonly --add-drivers ' vfio-pci' --kver '6.0.15-300.fc37.x86_64'
 drwxr-xr-x   3 root     root            0 Dec 31  1969 usr/lib/modules/6.0.15-300.fc37.x86_64/kernel/drivers/vfio
@@ -252,44 +265,65 @@ In this we're using `qemu-kvm` with `virt-manager` as a GUI to help us.
 As of this writing, I'm using `qemu-kvm` version `7.0.0`. This should be sufficient.
 
 ```bash
-➜  ~ 
+➜  ~
 > qemu-kvm --version
 QEMU emulator version 7.0.0 (qemu-7.0.0-12.fc37)
 Copyright (c) 2003-2022 Fabrice Bellard and the QEMU Project developers
 ```
 
-### Download Windows 10 ISO
+### Download Windows 11 ISO
 
-At the time of this writing I'm using _Windows 10_ and I am downloading it from this link. Verify it before clicking.
+At the time of this writing I'm using _Windows 11_ and I am downloading it from this link. Verify it before clicking.
 
-- [Microsoft Windows 10 ISO Download](https://www.microsoft.com/en-us/software-download/windows10ISO)
+- [Microsoft Windows 11 Download](https://www.microsoft.com/en-us/software-download/windows11)
 
 > [!Warning] Verify your ISO Download
 > Remember to verify the ISO download you're performing!
+
+### Download VirtIO Windows drivers
+
+Download latest ISO from [here](https://pve.proxmox.com/wiki/Windows_VirtIO_Drivers)
 
 ### Use Virtual Machine Manager
 
 This is going to use `virt-manager` or Virtual Machine Manager. Either way it's the GUI of the command-line application _virt-install_.
 
 - Open `virt-manager`.
-- Create a new Virtual Machine. Before installing, be sure to customize the configuration.
-	- Provide at least 8GB of RAM.
-	- Provide at least 4 CPUs.
-	- Provide at least 500GB of Storage.
-		- This is because Windows is stupid and huge.
+- Create a new Virtual Machine. Before installing, be sure to customize the configuration. These are my settings (you will probably change ram/cpu/storage).
+  - Provide at least 12GB of RAM.
+  - Provide at least 6 CPUs.
+  - Provide at least 50GB of Storage.
+    - This is because Windows is stupid and huge.
 - Ensure the following settings are set.
-	- Overview -> Chipset: Q35
-	- Overview -> Firmware: UEFI/OVMF
-	- Add Hardware -> PCI Host Device -> NVIDIA GPU
-	- Add Hardware -> PCI Host Device -> NVIDIA High Def Audio.
-- Enable the SATA CD Drive.
-- Change the boot order so that SATA CD Drive is first.
-- Set CPUs -> Topology -> Sockets 1, Cores 4, Threads 2.
-	- This makes 8 Virtual Processors.
+  - Overview -> Chipset: Q35
+  - Overview -> Firmware: UEFI
+  - Add Hardware -> PCI Host Device -> NVIDIA GPU
+  - Add Hardware -> PCI Host Device -> NVIDIA High Def Audio.
+  - Add Hardware -> Storage -> CDROM device
+    - Go to the new CDROM device and add the VirtIO ISO.
+  - Disk -> Disk type: VirtIO
+  - Disk -> cache mode: none
+  - Disk -> discard mode: unmap
+  - NIC -> Model: virtio
+  - Video -> None
+- Enable the SATA CD Drive (should already be enabled).
+- Change the boot order so that SATA CD Drive is first (or select when booting).
+- Remove the tablet device.
+- Add mouse and keyboard using [evdev](https://wiki.archlinux.org/title/PCI_passthrough_via_OVMF#Passing_keyboard/mouse_via_Evdev).
+- Setup audio using [PipeWire](https://wiki.archlinux.org/title/PCI_passthrough_via_OVMF#Passing_audio_from_virtual_machine_to_host_via_PipeWire_directly)
+- Set CPUs -> Topology -> Sockets 1, Cores 6, Threads 2.
+  - This makes 12 Virtual Processors.
 - Apply the changes.
 - Begin Installation
 
-Setup Windows as you can do the best. I had to move my monitor, then adjust the position of screens, update a bunch and then I could finally move on.
+### Install Windows
+
+- When you select disk, search for drivers and then select the VirtIO drivers that match the windows version.
+- When you get into windows, you won't have internet until you install the VirtIO drivers from the ISO (`virtio-win-gt-x64`).
+- Install the NVIDIA drivers.
+- Restart and apply updates.
+- If you have issues adjusting monitor configuration, try unplugging one of them and then plugging it back in.
+- Disable mouse acceleration, activate windows, etc.
 
 ### Modify the Domain XML
 
@@ -322,20 +356,4 @@ You'll need to have the VM powered off for these changes to take effect.
 > [!Warning] Secure Boot UEFI
 > I disabled this in the VM's Bios. I had to enable the boot menu, then press F12.
 
-### Install virtio-win-guest-tools
-
-This is from:
-
-- [Fedorapeople.org - virt-win-guest-tools.exe](https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/latest-virtio/virtio-win-guest-tools.exe)
-
 This will need to be downloaded on the Windows PC. Then reboot.
-
-### Install and configure NVIDIA drivers
-
-Download the _official_ NVIDIA drivers.
-
-### Install Steam
-
-Download and install SteamSetup.exe from:
-
-- [SteamPowered](https://steampowered.com)
